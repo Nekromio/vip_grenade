@@ -4,6 +4,13 @@
 #include <vip_core>
 #include <sdktools_functions>
 
+ConVar
+	cvGiveRoundStart,
+	cvEnable;
+
+bool
+	bGive[MAXPLAYERS+1];
+
 static const char g_sFeature[][] =
 {
 	"hegrenade",
@@ -39,18 +46,27 @@ public Plugin myinfo =
 	name = "[ViP Core] Give Grenade",
 	author = "Nek.'a 2x2",
 	description = "Выдача гранат",
-	version = "1.0.0 100",
+	version = "1.0.0 101",
 	url = "https://ggwp.site/"
 };
 
 public void OnPluginStart()
 {
+	cvEnable = CreateConVar("sm_vip_gr_enable", "1", "Включить/Выключить плагин", _, true, _, true, 1.0);
+
+	cvGiveRoundStart = CreateConVar("sm_vip_gr_giveround", "1", "1 Выдачать гранаты только при старте раунда/ 0 выдавать каждое возрождение", _, true, _, true, 1.0);
+
 	AutoExecConfig(true, "grenade", "vip");
 
-	HookEvent("round_start", Event_RoundStart);
+	HookEvent("round_end", Event_RoundEnd);
 	HookEvent("player_spawn", Event_PlayerSpawn);
 
 	if(VIP_IsVIPLoaded()) VIP_OnVIPLoaded();
+}
+
+public void OnClientDisconnect(int client)
+{
+	bGive[client] = false;
 }
 
 public void OnPluginEnd()
@@ -70,18 +86,30 @@ public void VIP_OnVIPLoaded()
 	}
 }
 
-void Event_RoundStart(Event hEvent, const char[] name, bool dontBroadcast)
+void Event_RoundEnd(Event hEvent, const char[] name, bool dontBroadcast)
 {
-	//
+	if(!cvEnable.BoolValue || !cvGiveRoundStart.BoolValue)
+		return;
+
+	for(int i = 1; i <= MaxClients; i++) if(IsClientInGame(i) && !IsFakeClient(i))
+	{
+		bGive[i] = false;
+	}
 }
 
 void Event_PlayerSpawn(Event hEvent, const char[] name, bool dontBroadcast)
 {
+	if(!cvEnable.BoolValue)
+		return;
+
 	int client = GetClientOfUserId(GetEventInt(hEvent, "userid"));
 
-	if(!IsClientValid(client) || !VIP_IsClientVIP(client))
+	if(!IsClientValid(client) || !VIP_IsClientVIP(client) || cvGiveRoundStart.BoolValue && bGive[client])
 		return;
-	
+
+	if(cvGiveRoundStart.BoolValue)
+		bGive[client] = true;
+
 	for(int i = 0; i < sizeof(g_sFeature); i++) if(VIP_IsClientFeatureUse(client, g_sFeature[i]))
 	{
 		GiveGrenade(client, i+11, VIP_GetClientFeatureInt(client, g_sFeature[i]));
